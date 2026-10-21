@@ -1,0 +1,17 @@
+/node_modules/
+/dist/
+/target/
+/src-tauri/target/
+/src-tauri/runtime/
+/artifacts/
+/.work/
+*.log
+*.gguf
+*.part
+*.safetensors
+huggingface.yml
+huggingface.yaml
+.env
+.env.*
+*.pfx
+*.pem
