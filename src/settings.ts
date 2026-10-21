@@ -8,7 +8,7 @@ export function settingsForm(settings: Settings, page: 'service' | 'app'): strin
       ${field('端口', 'service.port', s.port, { type: 'number', min: 1, max: 65535, required: true })}
       ${field('最大并发请求数', 'service.concurrency', s.concurrency, { type: 'number', min: 1, max: 16, required: true })}
       ${field('请求超时（秒）', 'service.timeout_secs', s.timeout_secs, { type: 'number', min: 5, max: 1800, required: true })}
-    </div><div id="network-warning"></div>${toggle('启动应用时启动服务', 'service.auto_start', s.auto_start, '模型需要单独加载；服务启动不会自动下载模型。')}</section>
+    </div><div id="network-warning"></div>${toggle('启动应用时启动服务', 'service.auto_start', s.auto_start, '自动加载已有模型并启动 API，不会自动下载模型。')}</section>
     <section class="panel settings-section"><div class="section-intro"><h2>推理与资源</h2><p>参数在下次加载模型时生效。Vulkan 加载失败时自动尝试 CPU。</p></div><div class="form-grid">
       ${field('上下文长度', 'inference.context_size', i.context_size, { type: 'number', min: 512, max: 131072, required: true })}
       ${field('批处理大小', 'inference.batch_size', i.batch_size, { type: 'number', min: 32, max: 4096, required: true })}

@@ -1,5 +1,6 @@
 [package]
 name = "qwen-desk"
+default-run = "qwen-desk"
 version = "1.0.0"
 edition = "2021"
 rust-version = "1.85"
@@ -12,6 +13,7 @@ name = "qwen_desk"
 [features]
 default = ["desktop"]
 desktop = ["dep:tauri", "dep:tauri-plugin-autostart", "dep:tauri-plugin-dialog", "dep:tauri-plugin-single-instance", "dep:tauri-build", "dep:tauri-plugin-window-state"]
+verification = []
 
 [build-dependencies]
 tauri-build = { version = "2", optional = true, features = [] }
@@ -42,7 +44,7 @@ tauri-plugin-single-instance = { version = "2", optional = true }
 tauri-plugin-window-state = { version = "2", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security", "Win32_UI_WindowsAndMessaging", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Registry"] }
 
 [dev-dependencies]
 tempfile = "3"
@@ -56,3 +58,4 @@ required-features = ["desktop"]
 [[bin]]
 name = "qwen-verify"
 path = "src/bin/verify.rs"
+required-features = ["verification"]

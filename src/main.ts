@@ -112,7 +112,7 @@ function connectionView(): void {
   patch('connection', (message ? `<div class="connection-banner ${connectionError || !native ? 'error' : ''}" role="status">${icon(connectionError || !native ? 'alert' : 'clock')}<span>${h(message)}</span>${native ? button('重新连接', 'refresh', { disabled: pollBusy }) : ''}</div>` : '') + (snapshot?.startup_error ? `<div class="connection-banner error" role="alert">${icon('alert')}<span>${h(errorMessage(snapshot.startup_error))}</span></div>` : ''));
   patch('sidebar-status', badge(!native ? '未连接桌面运行时' : connectionError ? '连接中断' : snapshot ? '本地运行时已连接' : '正在连接', online() ? 'good' : 'neutral'));
   $('#version')!.textContent = snapshot?.version ? `Qwen Desk ${snapshot.version}` : 'Qwen Desk';
-  $('#devtools')!.hidden = !(import.meta.env.DEV && snapshot?.dev_mode === true);
+  $('#devtools')!.hidden = !(snapshot?.dev_mode === true);
 }
 function updateLive(): void {
   connectionView();
@@ -166,9 +166,9 @@ function modelRow(model: ModelSpec): string {
   const available = inv?.exists === true;
   const defaultModel = ['qwen3-generation', 'qwen3-embedding'].includes(model.id);
   const attrs = `data-id="${h(model.id)}"`;
-  const action = (label: string, op: string, extra: { disabled?: boolean; icon?: string; class?: string } = {}) => button(label, op, { ...extra, disabled: off || extra.disabled, data: `${attrs} data-focus-key="${h(model.id)}-${op}"` });
+  const action = (label: string, op: string, extra: { disabled?: boolean; icon?: string; class?: string } = {}) => button(label, op, { ...extra, disabled: (op === 'cancel-load' ? disabled() : off) || extra.disabled, data: `${attrs} data-focus-key="${h(model.id)}-${op}"` });
   const progress = typeof download?.total === 'number' && download.total > 0 ? Math.min(100, Math.max(0, (download.downloaded ?? 0) / download.total * 100)) : null;
-  return `<article class="panel model-row"><div class="model-leading">${icon(model.kind === 'embedding' ? 'models' : 'inference')}</div><div class="model-main"><div class="section-heading"><h2>${h(model.name)}</h2>${badge(model.kind === 'embedding' ? '向量模型' : '生成模型', 'neutral')}${current ? stateBadge(state) : badge(available ? '本地可用' : activeDownload ? statusLabel(download?.status) : '尚未就绪', available ? 'good' : activeDownload ? 'working' : 'neutral')}</div><p class="model-id">${h(model.id)}${defaultModel ? ' · 默认配置' : ' · 自定义模型'}</p><p class="compatibility">${h(model.compatibility || '仅支持与 llama.cpp 兼容的 GGUF 模型。')}</p><dl class="model-details"><div><dt>来源</dt><dd>${h(model.source_repo ? `${model.source_repo} / ${model.filename}` : '本地导入')}</dd></div><div><dt>文件</dt><dd class="path">${h(inv?.path || model.path || '下载完成后生成托管路径')}</dd></div><div><dt>大小</dt><dd>${inv?.exists ? bytes(inv.size) : '—'}${inv ? inv.managed ? ' · 应用托管' : ' · 外部文件' : ''}</dd></div></dl>${activeDownload ? `<div class="download-progress"><div><span>${h(statusLabel(download?.status))}</span><span>${bytes(download?.downloaded ?? 0)} / ${download?.total ? bytes(download.total) : '正在获取大小'}${progress !== null ? ` · ${progress.toFixed(1)}%` : ''}</span></div><progress max="100" ${progress !== null ? `value="${progress}"` : ''} aria-label="${h(model.name)} 下载进度"></progress></div>` : ''}${download?.error ? `<p class="inline-error">${icon('alert')}${h(errorMessage(download.error))}</p>` : ''}${current && state?.error ? `<p class="inline-error">${h(errorMessage(state.error))}</p>` : ''}<div class="model-actions actions">${activeDownload ? action('取消下载', 'cancel-download') : !available && model.source_repo ? action(['failed', 'error', 'cancelled', 'canceled'].includes(download?.status ?? '') ? '重试下载' : '下载模型', 'download', { icon: 'download', class: 'primary' }) : ''}${current && isLoaded(model.kind) ? action('卸载模型', 'unload', { disabled: loading || (state?.active_requests ?? 0) > 0 }) : action(loading ? '模型切换中…' : '加载模型', 'load', { icon: 'play', class: available ? 'primary' : '', disabled: !available || loading || activeDownload })}${available && inv?.managed ? action('删除文件', 'delete-model', { class: 'danger-quiet', disabled: current || loading || activeDownload }) : ''}${!defaultModel ? action('移除注册', 'remove-model', { disabled: current || loading || activeDownload }) : ''}${pending ? '<span class="muted" role="status">正在处理…</span>' : ''}</div></div></article>`;
+  return `<article class="panel model-row"><div class="model-leading">${icon(model.kind === 'embedding' ? 'models' : 'inference')}</div><div class="model-main"><div class="section-heading"><h2>${h(model.name)}</h2>${badge(model.kind === 'embedding' ? '向量模型' : '生成模型', 'neutral')}${current ? stateBadge(state) : badge(available ? '本地可用' : activeDownload ? statusLabel(download?.status) : '尚未就绪', available ? 'good' : activeDownload ? 'working' : 'neutral')}</div><p class="model-id">${h(model.id)}${defaultModel ? ' · 默认配置' : ' · 自定义模型'}</p><p class="compatibility">${h(model.compatibility || '仅支持与 llama.cpp 兼容的 GGUF 模型。')}</p><dl class="model-details"><div><dt>来源</dt><dd>${h(model.source_repo ? `${model.source_repo} / ${model.filename}` : '本地导入')}</dd></div><div><dt>文件</dt><dd class="path">${h(inv?.path || model.path || '下载完成后生成托管路径')}</dd></div><div><dt>大小</dt><dd>${inv?.exists ? bytes(inv.size) : '—'}${inv ? inv.managed ? ' · 应用托管' : ' · 外部文件' : ''}</dd></div></dl>${activeDownload ? `<div class="download-progress"><div><span>${h(statusLabel(download?.status))}</span><span>${bytes(download?.downloaded ?? 0)} / ${download?.total ? bytes(download.total) : '正在获取大小'}${progress !== null ? ` · ${progress.toFixed(1)}%` : ''}</span></div><progress max="100" ${progress !== null ? `value="${progress}"` : ''} aria-label="${h(model.name)} 下载进度"></progress></div>` : ''}${download?.error ? `<p class="inline-error">${icon('alert')}${h(errorMessage(download.error))}</p>` : ''}${current && state?.error ? `<p class="inline-error">${h(errorMessage(state.error))}</p>` : ''}<div class="model-actions actions">${activeDownload ? action('取消下载', 'cancel-download') : !available && model.source_repo ? action(['failed', 'error', 'cancelled', 'canceled'].includes(download?.status ?? '') ? '重试下载' : '下载模型', 'download', { icon: 'download', class: 'primary' }) : ''}${current && state?.status === 'loading' ? action('取消加载', 'cancel-load') : current && isLoaded(model.kind) ? action('卸载模型', 'unload', { disabled: loading || (state?.active_requests ?? 0) > 0 }) : action(loading ? '模型切换中…' : '加载模型', 'load', { icon: 'play', class: available ? 'primary' : '', disabled: !available || loading || activeDownload })}${available && inv?.managed ? action('删除文件', 'delete-model', { class: 'danger-quiet', disabled: (current && isLoaded(model.kind)) || loading || activeDownload }) : ''}${!defaultModel ? action('移除注册', 'remove-model', { disabled: (current && isLoaded(model.kind)) || loading || activeDownload }) : ''}${pending ? '<span class="muted" role="status">正在处理…</span>' : ''}</div></div></article>`;
 }
 
 function renderInference(): void {
@@ -389,9 +389,9 @@ app.addEventListener('click', event => {
   if (action === 'copy-output') void navigator.clipboard.writeText(vectors.length ? JSON.stringify({ data: vectors.map(v => ({ object: 'embedding', index: v.index, embedding: v.values })), usage }, null, 2) : output).then(() => notice('结果已复制。')).catch(err => notice(`无法复制：${errorMessage(err)}`, true));
   if (action === 'clear-output') { output = ''; reasoning = ''; vectors = []; usage = {}; elapsed = 0; inferenceError = ''; finishReason = ''; inferenceStatus = '等待输入'; updateInference(); }
   if (model) {
-    const op = ({ download: 'download', 'cancel-download': 'cancel_download', load: 'load', unload: 'unload', 'delete-model': 'delete', 'remove-model': 'remove_model' } as Record<string, string>)[action ?? ''];
+    const op = ({ download: 'download', 'cancel-download': 'cancel_download', load: 'load', unload: 'unload', 'cancel-load': 'unload', 'delete-model': 'delete', 'remove-model': 'remove_model' } as Record<string, string>)[action ?? ''];
     if (!op) return;
-    const run = async () => perform(`model:${model.id}`, async () => { await dispatch(op, op === 'unload' ? { kind: model.kind } : { id: model.id }); }, ({ download: '下载任务已提交。', cancel_download: '已请求取消下载，可稍后重试。', load: '模型已加载。', unload: '模型已卸载。', delete: '托管模型文件已删除。', remove_model: '模型注册已移除，本地导入文件不会删除。' } as Record<string, string>)[op]);
+    const run = async () => perform(action === 'cancel-load' ? `cancel:${model.id}` : `model:${model.id}`, async () => { await dispatch(op, op === 'unload' ? { kind: model.kind } : { id: model.id }); }, ({ download: '下载任务已提交。', cancel_download: '已请求取消下载，可稍后重试。', load: '模型已加载。', unload: '模型已卸载。', delete: '托管模型文件已删除。', remove_model: '模型注册已移除，本地导入文件不会删除。' } as Record<string, string>)[op]);
     if (op === 'delete') confirmAction('删除模型文件', `将删除「${model.name}」的托管文件。再次使用时需要重新下载。`, run);
     else if (op === 'remove_model') confirmAction('移除模型注册', `将从模型库移除「${model.name}」。外部导入文件不会被删除。`, run);
     else if (op === 'load' && isLoaded(model.kind) && !isCurrent(model)) confirmAction('切换已加载模型', `当前${model.kind === 'generation' ? '生成' : '向量'}模型将被替换为「${model.name}」。`, run);
@@ -401,9 +401,9 @@ app.addEventListener('click', event => {
 app.addEventListener('submit', event => {
   event.preventDefault();
   const form = event.target as HTMLFormElement;
-  if (form.id === 'inference-form') void runInference();
-  if (form.id === 'settings-form') void saveSettings();
-  if (form.id === 'add-model-form') void addModel(form);
+  if (form.getAttribute('id') === 'inference-form') void runInference();
+  if (form.getAttribute('id') === 'settings-form') void saveSettings();
+  if (form.getAttribute('id') === 'add-model-form') void addModel(form);
 });
 app.addEventListener('input', event => {
   const element = event.target as HTMLInputElement;
@@ -412,6 +412,8 @@ app.addEventListener('input', event => {
 });
 app.addEventListener('change', event => {
   const element = event.target as HTMLInputElement;
+  if (element.closest('#settings-form')) captureSettings(element);
+  if (element.closest('#inference-form')) { captureInference(); updateInference(); }
   if (element.name === 'mode') $('#translation-target')!.hidden = element.value !== 'translation';
   if (element.name === 'source') {
     const local = element.value === 'local'; $('#source-local')!.hidden = !local; $('#source-hf')!.hidden = local;
@@ -424,7 +426,7 @@ app.addEventListener('keydown', event => {
   if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) && (event.target as HTMLElement).matches('[role="tab"]') && !currentInference) { event.preventDefault(); const kind = event.key === 'Home' ? 'generation' : event.key === 'End' ? 'embedding' : inferenceKind === 'generation' ? 'embedding' : 'generation'; $(`#tab-${kind}`)?.click(); }
 });
 document.addEventListener('contextmenu', event => event.preventDefault());
-window.addEventListener('hashchange', () => { captureInference(); route = routes.some(r => r.id === location.hash.slice(1)) ? location.hash.slice(1) as Route : 'dashboard'; renderPage(); $('#main')!.focus({ preventScroll: true }); });
+window.addEventListener('hashchange', () => { captureInference(); route = routes.some(r => r.id === location.hash.slice(1)) ? location.hash.slice(1) as Route : 'dashboard'; renderPage(); window.scrollTo(0, 0); $('#main')!.focus({ preventScroll: true }); });
 window.addEventListener('beforeunload', () => { if (currentInference) void dispatch('cancel_inference', { request_id: currentInference.request_id }); });
 renderPage();
 if (native) {

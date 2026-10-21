@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Qwen Desk",
+  "version": "1.0.0",
+  "identifier": "com.qwendesk.desktop",
+  "build": {
+    "features": ["desktop"],
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Qwen Desk",
+        "width": 1180,
+        "height": 800,
+        "minWidth": 760,
+        "minHeight": 560,
+        "decorations": false,
+        "visible": false,
+        "center": true,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data:; connect-src ipc: http://ipc.localhost; font-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.ico",
+      "icons/32x32.png",
+      "icons/128x128.png"
+    ],
+    "resources": {
+      "runtime/": "runtime/",
+      "licenses/": "licenses/"
+    },
+    "copyright": "Copyright 2026 Qwen Desk contributors",
+    "shortDescription": "Private local model inference workstation",
+    "longDescription": "Local generation, translation and embeddings with a Windows-native control panel and OpenAI-compatible API.",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "installerHooks": "installer-hooks.nsh",
+        "languages": [
+          "SimpChinese",
+          "English"
+        ],
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}
