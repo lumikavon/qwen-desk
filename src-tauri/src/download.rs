@@ -1077,6 +1077,10 @@ mod tests {
             assert!(!visible.contains("Authorization"));
             assert_eq!(err.code, "credential_invalid");
         }
+        assert_eq!(check_status(StatusCode::UNAUTHORIZED).unwrap_err().code, "credential_invalid");
+        assert_eq!(check_status(StatusCode::FORBIDDEN).unwrap_err().code, "forbidden");
+        assert_eq!(check_status(StatusCode::NOT_FOUND).unwrap_err().code, "not_found");
+        assert_eq!(check_status(StatusCode::TOO_MANY_REQUESTS).unwrap_err().code, "transient");
     }
     #[test]
     fn exact_ranges_and_ignored_ranges() {

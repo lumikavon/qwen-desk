@@ -17,6 +17,8 @@ CPU fallback is automatic after Vulkan launch/load failure. GPU layers, context,
 5. Desktop/UI: all five routes, custom chrome, tray, autostart/silent, DevTools debug-only; frontend build and Windows interaction tests.
 6. Delivery: debug and release builds; clean install, run, uninstall, reinstall; source archive and NSIS installer; audit all goal.md requirements.
 
+All six acceptance gates have been implemented and exercised. The final checks, actual-model results, installation cycle and environment limits are recorded in [VERIFICATION.md](VERIFICATION.md).
+
 ## UI design and prototype
 
 Use a quiet, light workstation interface: cloud #F4F6FA, paper #FFFFFF, ink #203047, muted #5B6B80, cobalt #3159C6, teal #137D76. Segoe UI Variable / Microsoft YaHei system fonts, 15px body, 28px titles, 1.5 line height. Sidebar 208px, custom titlebar 42px, main content aligned left with 28px padding. Structured rows for model library, a wide output workbench for inference, grouped settings forms. Status includes text and icon, keyboard-visible focus, 40px controls. No external fonts or assets. UI Pro Max's developer-tool/real-time monitoring recommendations inform accessibility/status; marketing landing-page suggestions are rejected as irrelevant.
@@ -43,7 +45,7 @@ Model flow: choose default/custom HF file or local GGUF → validate → downloa
 `Settings { models:Vec<ModelSpec>, inference:InferenceSettings, service:ServiceSettings, app:AppSettings }`.
 `Paths { data:PathBuf, models:PathBuf, logs:PathBuf, runtime:PathBuf, config:PathBuf, hf_candidates:Vec<PathBuf> }`.
 
-Engine agent owns `engine.rs` and `api.rs`. Expose:
+Engine and HTTP module interfaces:
 - `EngineManager::new(runtime: PathBuf) -> Arc<Self>`
 - `load(&self, model:ModelSpec, params:InferenceSettings) -> Result<()>`, `unload(&self, kind:ModelKind) -> Result<()>`, `shutdown(&self)` async
 - `snapshot(&self) -> serde_json::Value` async (object with generation/embedding each: status, model, mode, error, active_requests; plus last_inference)
@@ -52,14 +54,14 @@ Engine agent owns `engine.rs` and `api.rs`. Expose:
 - `Inference { pub stream: Pin<Box<dyn Stream<Item=Result<bytes::Bytes>> + Send>>, pub content_type:String }`
 - `api::start(engine:Arc<EngineManager>, settings:ServiceSettings) -> Result<ApiServer>` async; `ApiServer { address:String, ... }`, `stop(&mut self)` async. Include /health and /v1/models, no unauthenticated mutation/admin endpoints.
 
-Downloader agent owns `download.rs`. Expose:
+Downloader module interfaces:
 - `DownloadManager::new(paths:Paths) -> Arc<Self>`
 - `credential_status(&self) -> Value` async (safe status/message, never token)
 - `start(self:&Arc<Self>, model:ModelSpec) -> Result<()>` async (background transfer)
 - `cancel(&self, id:&str)` async; `snapshot(&self) -> Value` async (array records with id,status,downloaded,total,error,path)
 - `delete(&self, model:&ModelSpec) -> Result<()>` async (managed files only)
 - `shutdown(&self)` async; local model metadata missing/available included by main snapshot.
-Credentials lookup starts current working directory huggingface.yml, debug project root, executable adjacent and app data. Never persist tokens. YAML supports token, hf_token, huggingface.token. Private HF metadata must not be exposed. Downloads stored `Paths.models/<id>/<filename leaf>`. ID validated [A-Za-z0-9_-], max 64. Repo owner/name, file path validated no absolute/dot/empty components. Existing local model paths can be absolute GGUF files, delete never arbitrary imported file.
+Credentials lookup starts current working directory huggingface.yml, debug project root, executable adjacent and app data. Never persist tokens. YAML supports token, hf_token, huggingface.token and hf.token. Private HF metadata must not be exposed. Downloads stored `Paths.models/<id>/<filename leaf>`. ID validated [A-Za-z0-9_-], max 64. Repo owner/name, file path validated no absolute/dot/empty components. Existing local model paths can be absolute GGUF files, delete never arbitrary imported file.
 
 Frontend calls Tauri invoke `dispatch({op,payload})`:
 - snapshot -> {settings,engine,downloads,service:{running,address},hf:{status,message},paths:{models,logs},version,dev_mode}
