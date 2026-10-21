@@ -10,7 +10,9 @@ function Post-Json($path,$payload){
   try{$response=$client.PostAsync("$Address$path",$content).GetAwaiter().GetResult();$text=$response.Content.ReadAsStringAsync().GetAwaiter().GetResult();return @{status=[int]$response.StatusCode;text=$text}}finally{$content.Dispose()}
 }
 try {
-  $chat=@{model='warshanks/Qwen3-4B-Instruct-2507-AWQ';messages=@(@{role='system';content='Translate to English. Return only the translation.'},@{role='user';content='你好，世界。'});temperature=0;top_p=1;max_tokens=64;stream=$false}
+  # Keep this script ASCII so Windows PowerShell 5.1 and PowerShell 7 decode it identically.
+  $chinese=-join ([char[]](0x4F60,0x597D,0xFF0C,0x4E16,0x754C,0x3002))
+  $chat=@{model='warshanks/Qwen3-4B-Instruct-2507-AWQ';messages=@(@{role='system';content='Translate to English. Return only the translation.'},@{role='user';content=$chinese});temperature=0;top_p=1;max_tokens=64;stream=$false}
   $reply=Post-Json '/v1/chat/completions' $chat
   $data=$reply.text | ConvertFrom-Json
   if($reply.status -ne 200 -or $data.object -ne 'chat.completion' -or $data.choices[0].message.content -notmatch 'Hello' -or $data.usage.total_tokens -le 0){throw 'JSON generation verification failed'}
@@ -19,7 +21,7 @@ try {
   $reply=Post-Json '/v1/chat/completions' $chat
   if($reply.status -ne 200 -or $reply.text -notmatch 'chat.completion.chunk' -or $reply.text -notmatch 'data: \[DONE\]'){throw 'SSE generation verification failed'}
   'PASS installed HTTP SSE chunks and terminal DONE'
-  $reply=Post-Json '/v1/embeddings' @{model='Qwen/Qwen3-Embedding-0.6B';input=@('本地向量测试','local vector test')}
+  $reply=Post-Json '/v1/embeddings' @{model='Qwen/Qwen3-Embedding-0.6B';input=@($chinese,'local vector test')}
   $data=$reply.text | ConvertFrom-Json
   if($reply.status -ne 200 -or $data.data.Count -ne 2 -or $data.usage.prompt_tokens -le 0){throw 'Embedding response verification failed'}
   foreach($row in $data.data){
