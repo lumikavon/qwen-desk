@@ -88,6 +88,23 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $headCommit) { throw 'Checkout is not the requested tag.' }
       - name: Install dependencies
         run: npm ci --no-audit
+      - name: Restore pinned model cache
+        uses: actions/cache@v4
+        with:
+          path: .work/models
+          key: weights-cache-windows-${{ hashFiles('models.lock.json') }}
+      - name: Prepare pinned models from verified release data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force .work | Out-Null
+          $helper = git show "$($env:CI_WORKFLOW_SHA):scripts/restore-model-cache.ps1"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot load the versioned CI cache helper.' }
+          $helperPath = Join-Path $PWD '.work/restore-model-cache.ps1'
+          [IO.File]::WriteAllText($helperPath, ($helper -join "`n"), (New-Object Text.UTF8Encoding($false)))
+          & $helperPath
       # build-release prepares the pinned, isolated Inno Setup compiler.
       - name: Build both installers and release manifests
         env:
