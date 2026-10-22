@@ -164,31 +164,70 @@ impl DownloadManager {
         let recovered = tokio::task::spawn_blocking(move || {
             let mut records = Vec::new();
             for model in models {
-                if !model.path.is_empty() { continue; }
+                if !model.path.is_empty() {
+                    continue;
+                }
                 let recover = || -> Result<Option<Record>> {
                     validate_model(&model)?;
                     let owned = Managed::open(&paths.models, &model)?;
-                    let Some(manifest) = read_manifest(&owned.manifest)? else { return Ok(None); };
-                    if !manifest.belongs_to(&model) { return Err(AppError::new("not_owned", "模型配置与下载记录不匹配，请恢复原配置或使用新的模型 ID。")); }
+                    let Some(manifest) = read_manifest(&owned.manifest)? else {
+                        return Ok(None);
+                    };
+                    if !manifest.belongs_to(&model) {
+                        return Err(AppError::new(
+                            "not_owned",
+                            "模型配置与下载记录不匹配，请恢复原配置或使用新的模型 ID。",
+                        ));
+                    }
                     let complete = regular_exists(&owned.final_path)?;
                     let partial = regular_exists(&owned.part)?;
-                    if !complete && !partial { return Ok(None); }
-                    let file = if complete { &owned.final_path } else { &owned.part };
+                    if !complete && !partial {
+                        return Ok(None);
+                    }
+                    let file = if complete {
+                        &owned.final_path
+                    } else {
+                        &owned.part
+                    };
                     let size = std::fs::metadata(file).map_err(|_| AppError::io())?.len();
-                    if size > manifest.size || (complete && size != manifest.size) { return Err(AppError::new("integrity", "模型文件大小与校验记录不符，请删除后重新下载。")); }
-                    Ok(Some(Record { id: model.id.clone(), status: if complete { "ready" } else { "cancelled" }.into(), downloaded: size, total: Some(manifest.size), error: None, path: Some(file.to_string_lossy().into_owned()) }))
+                    if size > manifest.size || (complete && size != manifest.size) {
+                        return Err(AppError::new(
+                            "integrity",
+                            "模型文件大小与校验记录不符，请删除后重新下载。",
+                        ));
+                    }
+                    Ok(Some(Record {
+                        id: model.id.clone(),
+                        status: if complete { "ready" } else { "cancelled" }.into(),
+                        downloaded: size,
+                        total: Some(manifest.size),
+                        error: None,
+                        path: Some(file.to_string_lossy().into_owned()),
+                    }))
                 };
                 match recover() {
                     Ok(Some(record)) => records.push(record),
-                    Ok(None) => {},
-                    Err(e) => records.push(Record { id: model.id, status: "error".into(), downloaded: 0, total: None, error: Some(e.message), path: None }),
+                    Ok(None) => {}
+                    Err(e) => records.push(Record {
+                        id: model.id,
+                        status: "error".into(),
+                        downloaded: 0,
+                        total: None,
+                        error: Some(e.message),
+                        path: None,
+                    }),
                 }
             }
             records
-        }).await;
+        })
+        .await;
         if let Ok(recovered) = recovered {
             let mut records = self.records.lock().await;
-            for record in recovered { records.entry(record.id.to_ascii_lowercase()).or_insert(record); }
+            for record in recovered {
+                records
+                    .entry(record.id.to_ascii_lowercase())
+                    .or_insert(record);
+            }
         }
     }
 
@@ -1037,18 +1076,18 @@ mod tests {
     }
     #[tokio::test]
     async fn restored_partial_download_shows_resume_state() {
-        let dir=tempfile::tempdir().unwrap();
-        let paths=Paths::new(dir.path().into(),dir.path().into());
-        let model=model();
-        let owned=Managed::open(&paths.models,&model).unwrap();
-        save_manifest(&owned.manifest,&manifest(b"GGUFtest")).unwrap();
-        std::fs::write(&owned.part,b"GGUF").unwrap();
-        let manager=DownloadManager::new(paths);
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::new(dir.path().into(), dir.path().into());
+        let model = model();
+        let owned = Managed::open(&paths.models, &model).unwrap();
+        save_manifest(&owned.manifest, &manifest(b"GGUFtest")).unwrap();
+        std::fs::write(&owned.part, b"GGUF").unwrap();
+        let manager = DownloadManager::new(paths);
         manager.restore(&[model]).await;
-        let state=manager.snapshot().await;
-        assert_eq!(state[0]["status"],"cancelled");
-        assert_eq!(state[0]["downloaded"],4);
-        assert_eq!(state[0]["total"],8);
+        let state = manager.snapshot().await;
+        assert_eq!(state[0]["status"], "cancelled");
+        assert_eq!(state[0]["downloaded"], 4);
+        assert_eq!(state[0]["total"], 8);
         manager.shutdown().await;
     }
     #[test]
@@ -1077,10 +1116,24 @@ mod tests {
             assert!(!visible.contains("Authorization"));
             assert_eq!(err.code, "credential_invalid");
         }
-        assert_eq!(check_status(StatusCode::UNAUTHORIZED).unwrap_err().code, "credential_invalid");
-        assert_eq!(check_status(StatusCode::FORBIDDEN).unwrap_err().code, "forbidden");
-        assert_eq!(check_status(StatusCode::NOT_FOUND).unwrap_err().code, "not_found");
-        assert_eq!(check_status(StatusCode::TOO_MANY_REQUESTS).unwrap_err().code, "transient");
+        assert_eq!(
+            check_status(StatusCode::UNAUTHORIZED).unwrap_err().code,
+            "credential_invalid"
+        );
+        assert_eq!(
+            check_status(StatusCode::FORBIDDEN).unwrap_err().code,
+            "forbidden"
+        );
+        assert_eq!(
+            check_status(StatusCode::NOT_FOUND).unwrap_err().code,
+            "not_found"
+        );
+        assert_eq!(
+            check_status(StatusCode::TOO_MANY_REQUESTS)
+                .unwrap_err()
+                .code,
+            "transient"
+        );
     }
     #[test]
     fn exact_ranges_and_ignored_ranges() {

@@ -1,0 +1,99 @@
+name: Windows release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build and release (for example v1.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: powershell
+
+jobs:
+  checks:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt
+      - name: Verify Windows toolchains
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((node --version) -notmatch '^v24\.') { throw 'Node.js 24 is required.' }
+          if ((rustc -vV | Out-String) -notmatch 'host: x86_64-pc-windows-msvc') { throw 'Rust x64 MSVC is required.' }
+      - name: Install dependencies
+        run: npm ci
+      - name: Frontend tests
+        run: npm test
+      - name: Frontend production build
+        run: npm run build
+      - name: Rust tests
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --no-default-features
+      - name: Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    needs: checks
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt
+      - name: Require an existing version tag
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') { throw 'A version tag such as v1.0.0 is required.' }
+          $tagCommit = git rev-parse --verify "refs/tags/$($env:RELEASE_TAG)^{commit}"
+          if ($LASTEXITCODE -ne 0) { throw 'The requested tag does not exist.' }
+          $headCommit = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $headCommit) { throw 'Checkout is not the requested tag.' }
+      - name: Install dependencies
+        run: npm ci
+      # build-release prepares the pinned, isolated Inno Setup compiler.
+      - name: Build both installers and release manifests
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Variant all -Tag $env:RELEASE_TAG
+      - name: Upload and publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-release.ps1 -Provider github -Tag $env:RELEASE_TAG -Directory artifacts/release -Repository $env:GH_REPO

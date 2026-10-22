@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "qwen3-generation",
+      "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+      "filename": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+      "commit": "a06e946bb6b655725eafa393f4a9745d460374c9",
+      "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+      "size": 2497281120,
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "qwen3-embedding",
+      "repo": "Qwen/Qwen3-Embedding-0.6B-GGUF",
+      "filename": "Qwen3-Embedding-0.6B-Q8_0.gguf",
+      "commit": "370f27d7550e0def9b39c1f16d3fbaa13aa67728",
+      "sha256": "06507c7b42688469c4e7298b0a1e16deff06caf291cf0a5b278c308249c3e439",
+      "size": 639150592,
+      "license": "Apache-2.0"
+    }
+  ]
+}

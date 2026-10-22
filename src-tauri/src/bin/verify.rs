@@ -289,10 +289,18 @@ async fn smoke(core: &Arc<AppCore>) -> Result<()> {
         "CPU backend produces actual embedding",
     )?;
     core.load(&gen.id).await?;
-    let cpu_chat = collect(core, ModelKind::Generation, chat(&gen.name, false), "verify-cpu-generation").await?;
+    let cpu_chat = collect(
+        core,
+        ModelKind::Generation,
+        chat(&gen.name, false),
+        "verify-cpu-generation",
+    )
+    .await?;
     let cpu_chat: Value = serde_json::from_slice(&cpu_chat).map_err(|_| AppError::io())?;
     require(
-        cpu_chat["choices"][0]["message"]["content"].as_str().is_some_and(|s| s.to_lowercase().contains("hello"))
+        cpu_chat["choices"][0]["message"]["content"]
+            .as_str()
+            .is_some_and(|s| s.to_lowercase().contains("hello"))
             && core.engine.snapshot().await["generation"]["mode"] == "CPU",
         "CPU backend completes actual translation with the default generation model",
     )?;

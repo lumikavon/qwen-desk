@@ -4,11 +4,11 @@ Windows 本地模型工作台，基于 Tauri 2、Rust、llama.cpp 和 TypeScript
 
 ## 安装与首次使用
 
-运行 `Qwen Desk_1.0.0_x64-setup.exe`，按当前 Windows 用户安装。系统需 Windows 10/11 x64、Microsoft Visual C++ 2015–2022 x64 运行库和 Microsoft Edge WebView2；缺少 WebView2 时安装器会下载微软引导程序。GPU 模式需要显卡厂商提供的 Vulkan 驱动；CPU 引擎一并安装，GPU 无法初始化或加载时自动尝试 CPU。
+发行版提供 `QwenDesk-1.0.0-x64-no-model-setup.exe`（不含模型）和 `QwenDesk-1.0.0-x64-with-model-setup.exe`（含两个默认模型）。含模型版需将安装程序及所有同名前缀的编号 `.bin` 文件下载到同一目录，再运行 `.exe`。系统需 Windows 10/11 x64、Microsoft Visual C++ 2015–2022 x64 运行库和 Microsoft Edge WebView2；不含模型版在缺少 WebView2 时会下载微软引导程序，含模型版离线安装前请先安装 WebView2。GPU 模式需要显卡厂商提供的 Vulkan 驱动；CPU 引擎一并安装。
 
 若尚未安装 Visual C++ 运行库，先运行微软官方 [x64 Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)；当前用户安装器不会修改系统级 Visual C++ 运行库。
 
-1. 准备私有的 `huggingface.yml`，使用下文格式。
+1. 不含模型版若需要在线下载，准备私有的 `huggingface.yml`，使用下文格式；含模型版使用已安装的默认模型无需令牌。
 2. 在“应用设置”检查 Hugging Face 配置状态。
 3. 在“模型管理”下载所需模型，等待 SHA-256 校验完成，再点击“加载”。也可以添加已有 GGUF 文件或其他兼容的 Hugging Face GGUF 模型。
 4. 在“推理测试”运行翻译/生成或向量化，或在“仪表盘”启动 API；“服务设置”用于修改监听地址、端口及资源参数。
@@ -26,7 +26,7 @@ Windows 本地模型工作台，基于 Tauri 2、Rust、llama.cpp 和 TypeScript
 
 本产品以 Rust 管理官方 llama.cpp 原生服务进程，通过私有的、随机密钥保护的回环连接调用推理。这一进程隔离方式保留 llama.cpp 的原生 CPU/Vulkan 执行性能，同时允许取消、独立卸载两个模型及在原生后端崩溃时回收资源。它不依赖 Ollama、Python、云端推理或另行安装的 llama.cpp。
 
-原始 AWQ/Safetensors 文件不能被此后端直接加载，界面会明确提示。替换模型需要 llama.cpp 支持其 GGUF 架构，生成模型还需正确的 chat template；Embedding 模型需支持序列级输出。第三方模型的许可证和下载权限以模型发布者为准。模型权重不随安装包分发。
+原始 AWQ/Safetensors 文件不能被此后端直接加载，界面会明确提示。替换模型需要 llama.cpp 支持其 GGUF 架构，生成模型还需正确的 chat template；Embedding 模型需支持序列级输出。第三方模型的许可证和下载权限以模型发布者为准。含模型版附带经过 SHA-256 校验的默认模型；不含模型版可自行下载或导入。模型许可与来源见 `docs/MODEL-NOTICES.md`。
 
 ## Hugging Face 配置
 
@@ -98,6 +98,17 @@ cargo run --manifest-path src-tauri/Cargo.toml --no-default-features --features 
 
 验证命令需要端口 18848、18849、18850 可用。它检查真实翻译、有效向量、JSON/SSE、HTTP 错误、取消、卸载和 CPU 执行；不使用伪造推理结果。完整交付验证结果见 `docs/VERIFICATION.md`。
 安装版加载两个默认模型并启动 API 后，可运行 `powershell -File scripts/verify-api.ps1 -Address http://127.0.0.1:8848`，直接检验安装版的 JSON、SSE、向量和结构化错误。`verification` feature 仅用于源码验证，验证程序不会进入正式安装包。
+
+## CI/CD 与发行
+
+GitLab CI 配置位于 `.gitlab-ci.yml`，GitHub 标签发行流程位于 `.github/workflows/release.yml`。两者使用同一套 Windows 构建、模型校验和发布脚本。推送与源码版本一致的 `v1.0.0` 标签后，GitHub Actions 自动构建两个版本并发布 GitHub Release；手动运行流程也可发布已有标签。
+
+```powershell
+npm ci
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Variant all -Tag v1.0.0
+```
+
+构建结果在 `artifacts/release`，包含两个安装程序、含模型版的分卷数据、`models.lock.json`、发行说明及 `SHA256SUMS`。含模型版每个数据卷不超过 1 GiB。构建会自动下载并校验固定版本的 Inno Setup 编译器；模型可通过 `-ModelDirectory` 从本机缓存导入，否则按固定提交下载。切换两种安装器前请先卸载原程序，卸载保留个人模型及设置。GitLab Windows Runner 环境、变量、发布和校验步骤见 [发行指南](docs/RELEASING.md)。
 
 ## 故障定位
 

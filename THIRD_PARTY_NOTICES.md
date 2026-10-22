@@ -12,4 +12,4 @@ Qwen Desk source is licensed under MIT. Bundled third-party components retain th
 
 The native archives and their SHA-256 digests are pinned in `scripts/prepare-runtime.ps1`. The installer includes the runtime license text. `scripts/collect-licenses.py` gathers license files from the resolved Cargo packages and the installed frontend runtime package into `src-tauri/licenses`, which is included in the installer. Build dependencies and development utilities are not executed by the installed application.
 
-Default model references point to Qwen3 model families. Model weights are downloaded separately after installation and are not part of this source archive or installer. Consult the respective Hugging Face repositories for model-specific terms, attribution and upstream model cards.
+Default model references point to Qwen3 model families. The no-model installer and source archive contain no weights. The optional with-model installer redistributes the exact Apache-2.0 GGUF files pinned in `models.lock.json`, with original model cards, attribution and the Apache license. See `docs/MODEL-NOTICES.md` for upstream sources and redistribution details.

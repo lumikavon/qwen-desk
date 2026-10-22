@@ -9,6 +9,9 @@
     "test": "node --experimental-strip-types --test src/sse.test.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
+    "pack": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Variant all",
+    "pack:no-model": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Variant no-model",
+    "pack:with-model": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Variant with-model",
     "tauri": "tauri"
   },
   "dependencies": { "@tauri-apps/api": "^2.5.0" },
