@@ -330,10 +330,11 @@ async function saveSettings(): Promise<void> {
   await perform('settings', async () => {
     const saved = await dispatch<Settings>('save_settings', changes);
     draft = structuredClone(saved); draftBaseline = structuredClone(saved); dirty = false;
-    pendingRestart = pendingRestart || !!(snapshot?.service.running && JSON.stringify(previous?.service) !== JSON.stringify(saved.service));
+    pendingRestart = pendingRestart || !!(snapshot?.service.running && previous && (['host', 'port', 'concurrency', 'timeout_secs'] as const).some(key => previous.service[key] !== saved.service[key]));
     pendingReload = pendingReload || JSON.stringify(previous?.inference) !== JSON.stringify(saved.inference) || JSON.stringify(previous?.models) !== JSON.stringify(saved.models);
     if (snapshot) snapshot.settings = saved;
-    notice(`设置已保存。${pendingRestart ? '请重启 API 服务使服务设置生效。' : ''}${pendingReload ? '请重新加载模型使推理配置生效。' : ''}${route === 'app' ? '启动、窗口和日志设置已更新。' : ''}`);
+    const startupChanged = previous?.service.auto_start !== saved.service.auto_start;
+    notice(`设置已保存。${pendingRestart ? '请重启 API 服务使服务设置生效。' : ''}${pendingReload ? '请重新加载模型使推理配置生效。' : ''}${startupChanged ? saved.service.auto_start ? '下次启动应用时将自动加载本机模型并启动 API 服务。' : '已关闭下次启动时自动加载模型和启动 API 服务，当前模型与服务不受影响。' : route === 'app' ? '启动、窗口和日志设置已更新。' : ''}`);
   });
 }
 async function perform(key: string, action: () => Promise<void>, success?: string): Promise<void> {

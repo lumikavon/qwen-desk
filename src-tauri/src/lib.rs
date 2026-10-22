@@ -239,22 +239,28 @@ impl AppCore {
         Ok(())
     }
     pub async fn auto_start(&self) {
-        if !self.settings.read().await.service.auto_start {
+        let settings = self.settings.read().await.clone();
+        if !settings.service.auto_start {
             return;
         }
-        let models = self.settings.read().await.models.clone();
+        if let Err(e) = self.service_action("start").await {
+            *self.startup_error.write().await = Some(e);
+            return;
+        }
         for kind in [ModelKind::Generation, ModelKind::Embedding] {
-            if let Some(model) = models
+            if self.ensure_running().is_err() {
+                return;
+            }
+            if let Some(model) = settings
+                .models
                 .iter()
                 .find(|m| m.kind == kind && m.resolved_path(&self.paths).is_file())
             {
                 if let Err(e) = self.load(&model.id).await {
                     tracing::warn!(event="autoload_failed",code=%e.code);
+                    self.startup_error.write().await.get_or_insert(e);
                 }
             }
-        }
-        if let Err(e) = self.service_action("start").await {
-            *self.startup_error.write().await = Some(e);
         }
     }
     pub async fn shutdown(&self) {
@@ -279,6 +285,214 @@ fn service_url(s: &config::ServiceSettings) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+    use tokio::{net::TcpListener, time::timeout};
+
+    const STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
+
+    async fn startup_core() -> (tempfile::TempDir, Arc<AppCore>) {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut paths = Paths::new(tmp.path().join("data"), tmp.path().join("runtime"));
+        paths.hf_candidates.clear();
+        let core = AppCore::new(paths).await.unwrap();
+        // Reserve an OS-selected port until the isolated configuration is saved.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut settings = core.settings.read().await.clone();
+        settings.service.port = listener.local_addr().unwrap().port();
+        settings.inference.gpu_layers = 0;
+        core.persist_settings(settings).await.unwrap();
+        (tmp, core)
+    }
+
+    async fn local_fixture(core: &AppCore, id: &str, bytes: &[u8]) {
+        let path = core.model(id).await.unwrap().resolved_path(&core.paths);
+        tokio::fs::create_dir_all(path.parent().unwrap())
+            .await
+            .unwrap();
+        tokio::fs::write(path, bytes).await.unwrap();
+    }
+
+    fn gguf_header() -> [u8; 24] {
+        let mut header = [0; 24];
+        header[..4].copy_from_slice(b"GGUF");
+        header[4..8].copy_from_slice(&3u32.to_le_bytes());
+        header
+    }
+
+    async fn enable_startup(core: &AppCore) {
+        let mut settings = core.settings.read().await.clone();
+        settings.service.auto_start = true;
+        core.persist_settings(settings).await.unwrap();
+    }
+
+    async fn assert_healthy(core: &AppCore) {
+        let address = core
+            .service
+            .lock()
+            .await
+            .as_ref()
+            .expect("API 服务应已启动")
+            .address
+            .clone();
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .timeout(STARTUP_TIMEOUT)
+            .build()
+            .unwrap();
+        let response = client
+            .get(format!("{address}/health"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::OK);
+        assert_eq!(
+            response.json::<Value>().await.unwrap(),
+            json!({"status": "ok", "service": "Qwen Desk"})
+        );
+    }
+
+    #[tokio::test]
+    async fn disabled_startup_leaves_service_and_local_models_untouched() {
+        let (_tmp, core) = startup_core().await;
+        for id in ["qwen3-generation", "qwen3-embedding"] {
+            local_fixture(&core, id, &gguf_header()).await;
+        }
+        let before = core.engine.snapshot().await;
+        timeout(STARTUP_TIMEOUT, core.auto_start()).await.unwrap();
+        assert!(core.service.lock().await.is_none());
+        assert_eq!(core.engine.snapshot().await, before);
+        assert!(core.startup_error.read().await.is_none());
+        assert_eq!(core.downloads.snapshot().await, json!([]));
+        core.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn persisted_startup_serves_health_without_local_models() {
+        let (_tmp, original) = startup_core().await;
+        enable_startup(&original).await;
+        let paths = original.paths.clone();
+        original.shutdown().await;
+        drop(original);
+        let core = AppCore::new(paths).await.unwrap();
+        assert!(core.settings.read().await.service.auto_start);
+        let before = core.engine.snapshot().await;
+        timeout(STARTUP_TIMEOUT, core.auto_start()).await.unwrap();
+        assert_healthy(&core).await;
+        assert_eq!(core.engine.snapshot().await, before);
+        assert!(core.startup_error.read().await.is_none());
+        assert_eq!(core.downloads.snapshot().await, json!([]));
+        for model in &core.settings.read().await.models {
+            assert!(!model.resolved_path(&core.paths).exists());
+        }
+        core.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn startup_port_collision_is_visible_and_skips_autoload() {
+        let (_tmp, core) = startup_core().await;
+        enable_startup(&core).await;
+        local_fixture(&core, "qwen3-generation", &gguf_header()).await;
+        let port = core.settings.read().await.service.port;
+        let _occupied = TcpListener::bind(("127.0.0.1", port)).await.unwrap();
+        let before = core.engine.snapshot().await;
+        timeout(STARTUP_TIMEOUT, core.auto_start()).await.unwrap();
+        let snapshot = core.snapshot().await;
+        assert_eq!(snapshot["startup_error"]["code"], "port_unavailable");
+        assert_eq!(snapshot["service"]["running"], false);
+        assert_eq!(snapshot["engine"], before);
+        core.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn startup_serves_health_while_autoload_waits_then_attempts_both_kinds() {
+        let (_tmp, core) = startup_core().await;
+        enable_startup(&core).await;
+        for id in ["qwen3-generation", "qwen3-embedding"] {
+            local_fixture(&core, id, &gguf_header()).await;
+        }
+        // Missing files before existing fixtures must not prevent selection.
+        let mut settings = core.settings.read().await.clone();
+        for mut missing in settings.models.clone() {
+            missing.id = format!("missing-{}", missing.kind);
+            missing.name = missing.id.clone();
+            settings.models.insert(0, missing);
+        }
+        core.persist_settings(settings).await.unwrap();
+        let before = core.engine.snapshot().await;
+        let gate = core.library_gate.lock().await;
+        let mut startup = Box::pin(core.auto_start());
+        timeout(STARTUP_TIMEOUT, async {
+            loop {
+                assert!(futures_util::poll!(startup.as_mut()).is_pending());
+                if core.service.lock().await.is_some() {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_healthy(&core).await;
+        assert_eq!(core.engine.snapshot().await, before);
+        assert!(futures_util::poll!(startup.as_mut()).is_pending());
+        drop(gate);
+        timeout(STARTUP_TIMEOUT, startup).await.unwrap();
+        let snapshot = core.snapshot().await;
+        for kind in ["generation", "embedding"] {
+            assert_eq!(snapshot["engine"][kind]["status"], "error");
+            assert_eq!(snapshot["engine"][kind]["error"]["code"], "runtime_missing");
+            assert_eq!(
+                snapshot["engine"][kind]["model"]["id"],
+                format!("qwen3-{kind}")
+            );
+        }
+        assert_eq!(snapshot["startup_error"]["code"], "runtime_missing");
+        assert_eq!(core.downloads.snapshot().await, json!([]));
+        assert_healthy(&core).await;
+        core.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn corrupt_autoload_is_visible_and_other_kind_still_attempts_loading() {
+        let (_tmp, core) = startup_core().await;
+        enable_startup(&core).await;
+        local_fixture(&core, "qwen3-generation", b"invalid").await;
+        local_fixture(&core, "qwen3-embedding", &gguf_header()).await;
+        timeout(STARTUP_TIMEOUT, core.auto_start()).await.unwrap();
+        assert_healthy(&core).await;
+        let snapshot = core.snapshot().await;
+        assert_eq!(snapshot["startup_error"]["code"], "model_corrupt");
+        assert_eq!(
+            snapshot["startup_error"]["message"],
+            "模型文件不完整，请重新下载。"
+        );
+        assert_eq!(snapshot["engine"]["generation"]["status"], "unloaded");
+        assert_eq!(snapshot["engine"]["embedding"]["status"], "error");
+        assert_eq!(
+            snapshot["engine"]["embedding"]["error"]["code"],
+            "runtime_missing"
+        );
+        core.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn delayed_auto_start_cannot_reopen_listener_after_shutdown() {
+        let (_tmp, core) = startup_core().await;
+        enable_startup(&core).await;
+        let port = core.settings.read().await.service.port;
+        let gate = core.service.lock().await;
+        let mut startup = Box::pin(core.auto_start());
+        assert!(futures_util::poll!(startup.as_mut()).is_pending());
+        let mut shutdown = Box::pin(core.shutdown());
+        assert!(futures_util::poll!(shutdown.as_mut()).is_pending());
+        drop(gate);
+        timeout(STARTUP_TIMEOUT, startup).await.unwrap();
+        timeout(STARTUP_TIMEOUT, shutdown).await.unwrap();
+        timeout(STARTUP_TIMEOUT, core.auto_start()).await.unwrap();
+        assert!(core.service.lock().await.is_none());
+        assert!(TcpListener::bind(("127.0.0.1", port)).await.is_ok());
+    }
+
     #[tokio::test]
     async fn model_library_persists_and_rejects_duplicate_registration() {
         let tmp = tempfile::tempdir().unwrap();

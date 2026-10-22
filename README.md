@@ -4,7 +4,7 @@ Windows 本地模型工作台，基于 Tauri 2、Rust、llama.cpp 和 TypeScript
 
 ## 安装与首次使用
 
-发行版提供 `QwenDesk-1.0.0-x64-no-model-setup.exe`（不含模型）和 `QwenDesk-1.0.0-x64-with-model-setup.exe`（含两个默认模型）。含模型版需将安装程序及所有同名前缀的编号 `.bin` 文件下载到同一目录，再运行 `.exe`。系统需 Windows 10/11 x64、Microsoft Visual C++ 2015–2022 x64 运行库和 Microsoft Edge WebView2；不含模型版在缺少 WebView2 时会下载微软引导程序，含模型版离线安装前请先安装 WebView2。GPU 模式需要显卡厂商提供的 Vulkan 驱动；CPU 引擎一并安装。
+发行版提供 `QwenDesk-1.0.1-x64-no-model-setup.exe`（不含模型）和 `QwenDesk-1.0.1-x64-with-model-setup.exe`（含两个默认模型）。含模型版需将安装程序及所有同名前缀的编号 `.bin` 文件下载到同一目录，再运行 `.exe`。系统需 Windows 10/11 x64、Microsoft Visual C++ 2015–2022 x64 运行库和 Microsoft Edge WebView2；不含模型版在缺少 WebView2 时会下载微软引导程序，含模型版离线安装前请先安装 WebView2。GPU 模式需要显卡厂商提供的 Vulkan 驱动；CPU 引擎一并安装。
 
 若尚未安装 Visual C++ 运行库，先运行微软官方 [x64 Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)；当前用户安装器不会修改系统级 Visual C++ 运行库。
 
@@ -13,6 +13,9 @@ Windows 本地模型工作台，基于 Tauri 2、Rust、llama.cpp 和 TypeScript
 3. 在“模型管理”下载所需模型，等待 SHA-256 校验完成，再点击“加载”。也可以添加已有 GGUF 文件或其他兼容的 Hugging Face GGUF 模型。
 4. 在“推理测试”运行翻译/生成或向量化，或在“仪表盘”启动 API；“服务设置”用于修改监听地址、端口及资源参数。
 5. 默认关闭窗口会隐藏到托盘。从托盘打开窗口或退出；可以在设置中改变关闭行为。
+6. 在“应用设置 → 启动与窗口”开启“启动后自动加载模型并启动 API 服务”，然后保存。下次启动会从模型配置中分别加载首个已存在的生成、向量 GGUF，并启动 API。该选项默认关闭，也适用于开机启动和静默启动；不会自动下载模型。API 会先开始监听，模型加载进度可在仪表盘查看。端口冲突或模型加载失败会显示错误，仍可手动处理。
+
+`1.0.1` 自动启动功能的测试范围与真实模型验证结果见 [专项验证记录](docs/VERIFICATION-1.0.1.md)。
 
 模型、日志和配置位于 `%LOCALAPPDATA%\com.qwendesk.desktop`。卸载移除程序和本产品的开机启动项，保留个人模型及设置，重新安装后可以继续使用。应用中删除模型仅能删除其自身下载的文件；导入的外部文件不允许通过应用删除。
 窗口位置、大小及最大化状态单独保存在 `%APPDATA%\com.qwendesk.desktop\.window-state.json`。恢复时会检查显示器工作区域，避免窗口留在已经移除的显示器之外。
@@ -101,11 +104,11 @@ cargo run --manifest-path src-tauri/Cargo.toml --no-default-features --features 
 
 ## CI/CD 与发行
 
-GitLab CI 配置位于 `.gitlab-ci.yml`，GitHub 标签发行流程位于 `.github/workflows/release.yml`。两者使用同一套 Windows 构建、模型校验和发布脚本。推送与源码版本一致的 `v1.0.0` 标签后，GitHub Actions 自动构建两个版本并发布 GitHub Release；手动运行流程也可发布已有标签。
+GitLab CI 配置位于 `.gitlab-ci.yml`，GitHub 标签发行流程位于 `.github/workflows/release.yml`。两者使用同一套 Windows 构建、模型校验和发布脚本。推送与源码版本一致的 `v1.0.1` 标签后，GitHub Actions 自动构建两个版本并发布 GitHub Release；手动运行流程也可发布已有标签。
 
 ```powershell
 npm ci
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Variant all -Tag v1.0.0
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Variant all -Tag v1.0.1
 ```
 
 构建结果在 `artifacts/release`，包含两个安装程序、含模型版的分卷数据、`models.lock.json`、发行说明及 `SHA256SUMS`。含模型版每个数据卷不超过 1 GiB。构建会自动下载并校验固定版本的 Inno Setup 编译器；模型可通过 `-ModelDirectory` 从本机缓存导入，否则按固定提交下载。切换两种安装器前请先卸载原程序，卸载保留个人模型及设置。GitLab Windows Runner 环境、变量、发布和校验步骤见 [发行指南](docs/RELEASING.md)。

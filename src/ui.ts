@@ -36,5 +36,6 @@ export function select(label: string, name: string, value: unknown, options: [st
   return `<label class="field" for="${id}"><span>${escape(label)}</span><select id="${id}" name="${name}">${options.map(([val, text]) => `<option value="${escape(val)}" ${val === value ? 'selected' : ''}>${escape(text)}</option>`).join('')}</select></label>`;
 }
 export function toggle(label: string, name: string, value: boolean, hint: string): string {
-  return `<label class="toggle-row"><span><strong>${escape(label)}</strong><small>${escape(hint)}</small></span><input type="checkbox" name="${name}" ${value ? 'checked' : ''}><span class="switch" aria-hidden="true"></span></label>`;
+  const id = name.replaceAll('.', '-');
+  return `<label class="toggle-row" for="${id}"><span><strong id="${id}-label">${escape(label)}</strong><small id="${id}-hint">${escape(hint)}</small></span><input id="${id}" type="checkbox" name="${name}" aria-labelledby="${id}-label" aria-describedby="${id}-hint" ${value ? 'checked' : ''}><span class="switch" aria-hidden="true"></span></label>`;
 }

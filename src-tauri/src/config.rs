@@ -185,6 +185,7 @@ pub struct ServiceSettings {
     pub port: u16,
     pub concurrency: usize,
     pub timeout_secs: u64,
+    #[serde(default)]
     pub auto_start: bool,
 }
 impl Default for ServiceSettings {
@@ -392,6 +393,24 @@ mod tests {
     #[test]
     fn defaults_valid() {
         Settings::default().validate().unwrap();
+    }
+    #[test]
+    fn startup_setting_is_backward_compatible() {
+        let mut value = serde_json::to_value(Settings::default()).unwrap();
+        value["service"]
+            .as_object_mut()
+            .unwrap()
+            .remove("auto_start");
+        let settings: Settings = serde_json::from_value(value).unwrap();
+        settings.validate().unwrap();
+        assert!(!settings.service.auto_start);
+        for enabled in [true, false] {
+            let mut settings = settings.clone();
+            settings.service.auto_start = enabled;
+            let restored: Settings =
+                serde_json::from_slice(&serde_json::to_vec(&settings).unwrap()).unwrap();
+            assert_eq!(restored.service.auto_start, enabled);
+        }
     }
     #[test]
     fn rejects_path_traversal_and_windows_devices() {
