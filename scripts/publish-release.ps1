@@ -219,7 +219,7 @@ if ($Provider -eq 'github') {
         if (-not $release.draft) { throw 'This GitHub release is already published. Published releases are never replaced.' }
     } else {
         # Use the POST response ID; release-list caches may lag behind a newly created draft.
-        $release = Invoke-Gh -Arguments @('api', '--method', 'POST', "$repoApi/releases", '-f', "tag_name=$Tag", '-f', "target_commitish=$headCommit", '-f', "name=$Tag", '-F', 'draft=true', '-F', "body=@$($inventory['RELEASE-NOTES.md'].Path)") | ConvertFrom-Json
+        $release = Invoke-Gh -Arguments @('api', '--method', 'POST', "$repoApi/releases", '-f', "tag_name=$Tag", '-f', "name=$Tag", '-F', 'draft=true', '-F', "body=@$($inventory['RELEASE-NOTES.md'].Path)") | ConvertFrom-Json
         if (-not $release.id -or -not $release.draft -or $release.tag_name -cne $Tag) { throw 'GitHub did not return the requested draft release.' }
     }
     $releaseApi = "$repoApi/releases/$($release.id)"
@@ -245,9 +245,11 @@ if ($Provider -eq 'github') {
         if ($digest -and $digest -ine "sha256:$($inventory[$name].Sha256)") { throw "GitHub asset digest differs: $name" }
     }
     # Publish the verified draft with its tag explicit; preserve identity across API updates.
+    # The tag already exists and was verified above. Omit target_commitish to avoid
+    # asking a GITHUB_TOKEN to create or retarget a ref for a historical commit.
     [void](Assert-GhDraft -Endpoint $releaseApi)
     Assert-GhTag -RepoApi $repoApi -EncodedTag $encodedTag -Commit $headCommit
-    [void](Invoke-Gh -Arguments @('api', '--method', 'PATCH', $releaseApi, '-f', "tag_name=$Tag", '-f', "target_commitish=$headCommit", '-f', "name=$Tag", '-F', "body=@$($inventory['RELEASE-NOTES.md'].Path)", '-F', 'draft=false'))
+    [void](Invoke-Gh -Arguments @('api', '--method', 'PATCH', $releaseApi, '-f', "tag_name=$Tag", '-f', "name=$Tag", '-F', "body=@$($inventory['RELEASE-NOTES.md'].Path)", '-F', 'draft=false'))
     $published = Get-GhJson -Endpoint $releaseApi
     if ($published.draft -or $published.tag_name -cne $Tag) { throw 'GitHub did not publish the requested version tag.' }
     Assert-GhTag -RepoApi $repoApi -EncodedTag $encodedTag -Commit $headCommit
