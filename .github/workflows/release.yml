@@ -45,7 +45,7 @@ jobs:
           if ((node --version) -notmatch '^v24\.') { throw 'Node.js 24 is required.' }
           if ((rustc -vV | Out-String) -notmatch 'host: x86_64-pc-windows-msvc') { throw 'Rust x64 MSVC is required.' }
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit
       - name: Frontend tests
         run: npm test
       - name: Frontend production build
@@ -87,7 +87,7 @@ jobs:
           $headCommit = git rev-parse HEAD
           if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $headCommit) { throw 'Checkout is not the requested tag.' }
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit
       # build-release prepares the pinned, isolated Inno Setup compiler.
       - name: Build both installers and release manifests
         env:

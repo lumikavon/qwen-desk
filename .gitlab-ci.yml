@@ -22,8 +22,8 @@ default:
 checks:
   stage: checks
   script:
-    - npm ci
-    - if ($LASTEXITCODE -ne 0) { throw 'npm ci failed.' }
+    - npm ci --no-audit
+    - if ($LASTEXITCODE -ne 0) { throw 'npm ci --no-audit failed.' }
     - npm test
     - if ($LASTEXITCODE -ne 0) { throw 'npm test failed.' }
     - npm run build
@@ -41,7 +41,7 @@ release:
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$/'
   script:
-    - npm ci
+    - npm ci --no-audit
     - if ($LASTEXITCODE -ne 0) { throw 'npm ci failed.' }
     # build-release prepares the pinned, isolated Inno Setup compiler.
     - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Variant all -Tag $env:CI_COMMIT_TAG
