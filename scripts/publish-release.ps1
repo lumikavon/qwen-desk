@@ -218,11 +218,9 @@ if ($Provider -eq 'github') {
         $release = $existing[0]
         if (-not $release.draft) { throw 'This GitHub release is already published. Published releases are never replaced.' }
     } else {
-        [void](Invoke-Gh -Arguments @('release', 'create', $Tag, '--repo', $Repository, '--draft', '--verify-tag', '--target', $headCommit, '--title', $Tag, '--notes-file', $inventory['RELEASE-NOTES.md'].Path))
-        # List releases to include drafts; do not depend on the published-tag endpoint.
-        $created = @(Get-GhPages -Endpoint "$repoApi/releases?per_page=100" | Where-Object { $_.tag_name -ceq $Tag })
-        if ($created.Count -ne 1) { throw 'Could not identify the new GitHub draft release.' }
-        $release = $created[0]
+        # Use the POST response ID; release-list caches may lag behind a newly created draft.
+        $release = Invoke-Gh -Arguments @('api', '--method', 'POST', "$repoApi/releases", '-f', "tag_name=$Tag", '-f', "target_commitish=$headCommit", '-f', "name=$Tag", '-F', 'draft=true', '-F', "body=@$($inventory['RELEASE-NOTES.md'].Path)") | ConvertFrom-Json
+        if (-not $release.id -or -not $release.draft -or $release.tag_name -cne $Tag) { throw 'GitHub did not return the requested draft release.' }
     }
     $releaseApi = "$repoApi/releases/$($release.id)"
     [void](Assert-GhDraft -Endpoint $releaseApi)
