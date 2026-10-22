@@ -244,13 +244,13 @@ if ($Provider -eq 'github') {
         $digest = Get-PropertyValue -Object $asset -Name 'digest'
         if ($digest -and $digest -ine "sha256:$($inventory[$name].Sha256)") { throw "GitHub asset digest differs: $name" }
     }
-    # Refresh notes on a retry, then publish only the fully verified draft.
+    # Publish the verified draft with its tag explicit; preserve identity across API updates.
     [void](Assert-GhDraft -Endpoint $releaseApi)
     Assert-GhTag -RepoApi $repoApi -EncodedTag $encodedTag -Commit $headCommit
-    [void](Invoke-Gh -Arguments @('api', '--method', 'PATCH', $releaseApi, '-F', "body=@$($inventory['RELEASE-NOTES.md'].Path)"))
-    [void](Invoke-Gh -Arguments @('api', '--method', 'PATCH', $releaseApi, '-F', 'draft=false'))
+    [void](Invoke-Gh -Arguments @('api', '--method', 'PATCH', $releaseApi, '-f', "tag_name=$Tag", '-f', "target_commitish=$headCommit", '-f', "name=$Tag", '-F', "body=@$($inventory['RELEASE-NOTES.md'].Path)", '-F', 'draft=false'))
     $published = Get-GhJson -Endpoint $releaseApi
-    if ($published.draft) { throw 'GitHub release is still a draft.' }
+    if ($published.draft -or $published.tag_name -cne $Tag) { throw 'GitHub did not publish the requested version tag.' }
+    Assert-GhTag -RepoApi $repoApi -EncodedTag $encodedTag -Commit $headCommit
     Write-Output "Published $($published.html_url)"
 } else {
     foreach ($variable in @('CI_API_V4_URL', 'CI_PROJECT_ID', 'CI_JOB_TOKEN')) {
