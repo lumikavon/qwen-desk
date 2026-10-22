@@ -58,6 +58,7 @@ try {
 
 Windows 10/11 x64 desktop application with bundled CPU/Vulkan inference runtimes.
 
+- **Unified application icon:** the title bar, sidebar, taskbar, tray and installers share the same blue Q mark. Windows icon resources include small and high-DPI sizes.
 - **Startup automation:** enable "Load models and start API on launch" in Application Settings > Startup & Window, then save. On the next launch the API starts listening and existing generation/embedding models load automatically. Downloads are never started automatically; the option is off by default.
 - **Without models:** run QwenDesk-$version-x64-no-model-setup.exe; download models in the application or import existing GGUF files.
 - **With models:** download QwenDesk-$version-x64-with-model-setup.exe and EVERY matching numbered .bin file into the SAME folder, then run the .exe. Includes Qwen3-4B-Instruct-2507 Q4_K_M and Qwen3-Embedding-0.6B Q8_0 (Apache-2.0). No model download or Hugging Face token is needed.

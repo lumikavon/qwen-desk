@@ -1,5 +1,5 @@
+const appIconUrl = new URL('./logo.svg', import.meta.url).href;
 const paths: Record<string, string> = {
-  logo: '<path d="m12 3 8 5v8l-8 5-8-5V8l8-5Z"/><path d="m4 8 8 5 8-5M12 13v8M8 5.5l8 5v5"/>',
   dashboard: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   models: '<path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/>',
   inference: '<path d="m8 5-5 7 5 7m8-14 5 7-5 7m-3-15-2 16"/>',
@@ -15,7 +15,10 @@ const paths: Record<string, string> = {
   terminal: '<path d="m4 6 6 6-6 6m9 0h7"/>', clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   dot: '<circle cx="12" cy="12" r="4" fill="currentColor"/>', copy: '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
 };
-export function icon(name: string): string { return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] ?? paths.dot}</svg>`; }
+export function icon(name: string): string {
+  if (name === 'logo') return `<img class="app-icon" src="${appIconUrl}" width="20" height="20" alt="" aria-hidden="true" draggable="false">`;
+  return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] ?? paths.dot}</svg>`;
+}
 export function escape(value: unknown): string { return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!); }
 export function button(label: string, action: string, options: { icon?: string; class?: string; disabled?: boolean; data?: string; title?: string } = {}): string {
   return `<button type="button" class="button ${options.class ?? ''}" data-action="${action}" ${options.data ?? ''} ${options.disabled ? 'disabled' : ''} ${options.title ? `title="${escape(options.title)}"` : ''}>${options.icon ? icon(options.icon) : ''}<span>${escape(label)}</span></button>`;

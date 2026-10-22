@@ -484,9 +484,14 @@ pub fn run() {
             let stop = MenuItem::with_id(app, "stop", "停止 API 服务", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &start, &stop, &quit])?;
-            let icon = app.default_window_icon().ok_or("missing app icon")?.clone();
+            let app_icon = app.default_window_icon().ok_or("missing app icon")?.clone();
+            if let Some(window) = app.get_webview_window("main") {
+                window.set_icon(app_icon)?;
+            }
+            // Use the matching 32px raster for a sharp tray icon on high-DPI displays.
+            let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
             let tray = TrayIconBuilder::with_id("main")
-                .icon(icon)
+                .icon(tray_icon)
                 .tooltip("Qwen Desk · 本地推理")
                 .menu(&menu)
                 .show_menu_on_left_click(false)

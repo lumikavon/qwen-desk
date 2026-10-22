@@ -4,7 +4,7 @@ Windows 本地模型工作台，基于 Tauri 2、Rust、llama.cpp 和 TypeScript
 
 ## 安装与首次使用
 
-发行版提供 `QwenDesk-1.0.1-x64-no-model-setup.exe`（不含模型）和 `QwenDesk-1.0.1-x64-with-model-setup.exe`（含两个默认模型）。含模型版需将安装程序及所有同名前缀的编号 `.bin` 文件下载到同一目录，再运行 `.exe`。系统需 Windows 10/11 x64、Microsoft Visual C++ 2015–2022 x64 运行库和 Microsoft Edge WebView2；不含模型版在缺少 WebView2 时会下载微软引导程序，含模型版离线安装前请先安装 WebView2。GPU 模式需要显卡厂商提供的 Vulkan 驱动；CPU 引擎一并安装。
+发行版提供 `QwenDesk-1.0.2-x64-no-model-setup.exe`（不含模型）和 `QwenDesk-1.0.2-x64-with-model-setup.exe`（含两个默认模型）。含模型版需将安装程序及所有同名前缀的编号 `.bin` 文件下载到同一目录，再运行 `.exe`。系统需 Windows 10/11 x64、Microsoft Visual C++ 2015–2022 x64 运行库和 Microsoft Edge WebView2；不含模型版在缺少 WebView2 时会下载微软引导程序，含模型版离线安装前请先安装 WebView2。GPU 模式需要显卡厂商提供的 Vulkan 驱动；CPU 引擎一并安装。
 
 若尚未安装 Visual C++ 运行库，先运行微软官方 [x64 Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)；当前用户安装器不会修改系统级 Visual C++ 运行库。
 
@@ -16,6 +16,8 @@ Windows 本地模型工作台，基于 Tauri 2、Rust、llama.cpp 和 TypeScript
 6. 在“应用设置 → 启动与窗口”开启“启动后自动加载模型并启动 API 服务”，然后保存。下次启动会从模型配置中分别加载首个已存在的生成、向量 GGUF，并启动 API。该选项默认关闭，也适用于开机启动和静默启动；不会自动下载模型。API 会先开始监听，模型加载进度可在仪表盘查看。端口冲突或模型加载失败会显示错误，仍可手动处理。
 
 `1.0.1` 自动启动功能的测试范围与真实模型验证结果见 [专项验证记录](docs/VERIFICATION-1.0.1.md)。
+
+`1.0.2` 统一应用、标题栏、侧栏、Windows 任务栏、托盘及安装器的蓝色 Q 图标。`src/logo.svg` 是唯一图标源；修改后运行 `python scripts/create-icons.py` 生成 PNG/ICO，使用 `python scripts/create-icons.py --check` 检查全部尺寸和 ICO 帧是否同步。生成器需要 Pillow。
 
 模型、日志和配置位于 `%LOCALAPPDATA%\com.qwendesk.desktop`。卸载移除程序和本产品的开机启动项，保留个人模型及设置，重新安装后可以继续使用。应用中删除模型仅能删除其自身下载的文件；导入的外部文件不允许通过应用删除。
 窗口位置、大小及最大化状态单独保存在 `%APPDATA%\com.qwendesk.desktop\.window-state.json`。恢复时会检查显示器工作区域，避免窗口留在已经移除的显示器之外。
