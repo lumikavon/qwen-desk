@@ -1,3 +1,4 @@
+import { t } from './i18n';
 const appIconUrl = new URL('./logo.svg', import.meta.url).href;
 const paths: Record<string, string> = {
   dashboard: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
@@ -21,11 +22,11 @@ export function icon(name: string): string {
 }
 export function escape(value: unknown): string { return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!); }
 export function button(label: string, action: string, options: { icon?: string; class?: string; disabled?: boolean; data?: string; title?: string } = {}): string {
-  return `<button type="button" class="button ${options.class ?? ''}" data-action="${action}" ${options.data ?? ''} ${options.disabled ? 'disabled' : ''} ${options.title ? `title="${escape(options.title)}"` : ''}>${options.icon ? icon(options.icon) : ''}<span>${escape(label)}</span></button>`;
+  return `<button type="button" class="button ${options.class ?? ''}" data-action="${action}" ${options.data ?? ''} ${options.disabled ? 'disabled' : ''} ${options.class?.split(' ').includes('icon-only') ? `aria-label="${escape(label)}"` : ''} ${options.title ? `title="${escape(options.title)}"` : ''}>${options.icon ? icon(options.icon) : ''}<span>${escape(label)}</span></button>`;
 }
 export function badge(label: string, tone = 'neutral'): string { return `<span class="badge ${tone}">${icon(tone === 'bad' ? 'alert' : tone === 'good' ? 'check' : 'dot')}${escape(label)}</span>`; }
 export function bytes(value: unknown): string {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '未知大小';
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return t('未知大小');
   if (value < 1024) return `${value} B`;
   const unit = Math.min(Math.floor(Math.log(value) / Math.log(1024)), 4);
   return `${(value / 1024 ** unit).toFixed(1)} ${['B', 'KB', 'MB', 'GB', 'TB'][unit]}`;

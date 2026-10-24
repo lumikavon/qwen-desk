@@ -1,15 +1,15 @@
 # Qwen Desk
 
-Windows 本地模型工作台，基于 Tauri 2、Rust、llama.cpp 和 TypeScript。支持生成/翻译、Embedding、模型下载及本机 OpenAI 兼容服务。模型推理在本机原生进程执行，前端不接触 Hugging Face 凭据。
+Windows 本地模型工作台，基于 Tauri 2、Rust、llama.cpp 和 TypeScript。支持中英文界面、生成/翻译、Embedding、模型下载及本机 OpenAI 兼容服务。模型推理在本机原生进程执行，已保存的 Hugging Face 凭据不会返回前端。
 
 ## 安装与首次使用
 
-发行版提供 `QwenDesk-1.0.2-x64-no-model-setup.exe`（不含模型）和 `QwenDesk-1.0.2-x64-with-model-setup.exe`（含两个默认模型）。含模型版需将安装程序及所有同名前缀的编号 `.bin` 文件下载到同一目录，再运行 `.exe`。系统需 Windows 10/11 x64、Microsoft Visual C++ 2015–2022 x64 运行库和 Microsoft Edge WebView2；不含模型版在缺少 WebView2 时会下载微软引导程序，含模型版离线安装前请先安装 WebView2。GPU 模式需要显卡厂商提供的 Vulkan 驱动；CPU 引擎一并安装。
+发行版提供 `QwenDesk-1.0.3-x64-no-model-setup.exe`（不含模型）和 `QwenDesk-1.0.3-x64-with-model-setup.exe`（含两个默认模型）。含模型版需将安装程序及所有同名前缀的编号 `.bin` 文件下载到同一目录，再运行 `.exe`。系统需 Windows 10/11 x64、Microsoft Visual C++ 2015–2022 x64 运行库和 Microsoft Edge WebView2；不含模型版在缺少 WebView2 时会下载微软引导程序，含模型版离线安装前请先安装 WebView2。GPU 模式需要显卡厂商提供的 Vulkan 驱动；CPU 引擎一并安装。
 
 若尚未安装 Visual C++ 运行库，先运行微软官方 [x64 Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)；当前用户安装器不会修改系统级 Visual C++ 运行库。
 
-1. 不含模型版若需要在线下载，准备私有的 `huggingface.yml`，使用下文格式；含模型版使用已安装的默认模型无需令牌。
-2. 在“应用设置”检查 Hugging Face 配置状态。
+1. 不含模型版若需要在线下载，在“应用设置 → Hugging Face 认证”输入只读访问令牌并点击“保存令牌”；也支持下文所述的 `huggingface.yml`。含模型版使用已安装的默认模型无需令牌。
+2. 在“应用设置”检查 Hugging Face 配置状态。语言可在“界面语言”中选择简体中文或 English，立即切换，点击“保存设置”后下次启动继续使用。模型名称、路径、用户输入和推理输出保持原文。
 3. 在“模型管理”下载所需模型，等待 SHA-256 校验完成，再点击“加载”。也可以添加已有 GGUF 文件或其他兼容的 Hugging Face GGUF 模型。
 4. 在“推理测试”运行翻译/生成或向量化，或在“仪表盘”启动 API；“服务设置”用于修改监听地址、端口及资源参数。
 5. 默认关闭窗口会隐藏到托盘。从托盘打开窗口或退出；可以在设置中改变关闭行为。
@@ -18,6 +18,8 @@ Windows 本地模型工作台，基于 Tauri 2、Rust、llama.cpp 和 TypeScript
 `1.0.1` 自动启动功能的测试范围与真实模型验证结果见 [专项验证记录](docs/VERIFICATION-1.0.1.md)。
 
 `1.0.2` 统一应用、标题栏、侧栏、Windows 任务栏、托盘及安装器的蓝色 Q 图标。`src/logo.svg` 是唯一图标源；修改后运行 `python scripts/create-icons.py` 生成 PNG/ICO，使用 `python scripts/create-icons.py --check` 检查全部尺寸和 ICO 帧是否同步。生成器需要 Pillow。
+
+`1.0.3` 增加中英文界面与托盘菜单、应用内 Hugging Face 令牌配置，并将右侧滚动条限制在顶部栏下方的主内容区，窗口控制按钮始终独立显示。
 
 模型、日志和配置位于 `%LOCALAPPDATA%\com.qwendesk.desktop`。卸载移除程序和本产品的开机启动项，保留个人模型及设置，重新安装后可以继续使用。应用中删除模型仅能删除其自身下载的文件；导入的外部文件不允许通过应用删除。
 窗口位置、大小及最大化状态单独保存在 `%APPDATA%\com.qwendesk.desktop\.window-state.json`。恢复时会检查显示器工作区域，避免窗口留在已经移除的显示器之外。
@@ -35,15 +37,17 @@ Windows 本地模型工作台，基于 Tauri 2、Rust、llama.cpp 和 TypeScript
 
 ## Hugging Face 配置
 
-创建私有文件 `huggingface.yml`：
+推荐在“应用设置 → Hugging Face 认证”输入令牌并单独保存；保存成功后输入框清空，只显示配置状态。留空不修改现有令牌。此操作无需保存其他设置，也无需重启；下载时验证远端访问权限。
+
+也可以创建私有文件 `huggingface.yml`：
 
 ```yaml
 token: "填写您自己的 Hugging Face 只读访问令牌"
 ```
 
-也支持 `hf_token` 、`huggingface.token` 或 `hf.token` 字段。程序依次检查工作目录的 `./huggingface.yml`、开发时的项目根目录、可执行文件旁、应用数据目录。安装后推荐放在 `%LOCALAPPDATA%\com.qwendesk.desktop\huggingface.yml`，这样从开始菜单或开机启动也能找到。
+也支持 `hf_token` 、`huggingface.token` 或 `hf.token` 字段。程序优先检查应用数据目录 `%LOCALAPPDATA%\com.qwendesk.desktop\huggingface.yml`（界面保存的位置），然后依次检查工作目录的 `./huggingface.yml`、开发时的项目根目录、可执行文件旁。应用数据目录中的配置适用于从开始菜单或开机启动，且不会被旧的工作目录文件覆盖。
 
-下载时自动读取文件，凭据不持久化到其他配置、不发送到前端、不写入日志。缺少文件、YAML 无效、401 和 403 分别给出可操作的错误。下载以 Hugging Face 元数据中的不可变提交、文件大小和 SHA-256 固定版本；取消保留可恢复的部分文件，重新下载会校验元数据并续传，完成时校验文件后才显示为可用。修改 token 后无需重启。
+下载时自动读取文件，令牌与普通 `settings.json` 分开保存，已保存的令牌不发送到前端、不写入日志。缺少文件、YAML 无效、401 和 403 分别给出可操作的错误。下载以 Hugging Face 元数据中的不可变提交、文件大小和 SHA-256 固定版本；取消保留可恢复的部分文件，重新下载会校验元数据并续传，完成时校验文件后才显示为可用。修改 token 后无需重启，已开始的下载继续使用其启动时读取的凭据。
 
 不要将真实令牌写进示例、源码、命令行参数或提交。仓库已忽略 `huggingface.yml`、模型权重、日志、构建缓存和本地密钥。
 
@@ -106,11 +110,11 @@ cargo run --manifest-path src-tauri/Cargo.toml --no-default-features --features 
 
 ## CI/CD 与发行
 
-GitLab CI 配置位于 `.gitlab-ci.yml`，GitHub 标签发行流程位于 `.github/workflows/release.yml`。两者使用同一套 Windows 构建、模型校验和发布脚本。推送与源码版本一致的 `v1.0.1` 标签后，GitHub Actions 自动构建两个版本并发布 GitHub Release；手动运行流程也可发布已有标签。
+GitLab CI 配置位于 `.gitlab-ci.yml`，GitHub 标签发行流程位于 `.github/workflows/release.yml`。两者使用同一套 Windows 构建、模型校验和发布脚本。推送与源码版本一致的 `v1.0.3` 标签后，GitHub Actions 自动构建两个版本并发布 GitHub Release；手动运行流程也可发布已有标签。
 
 ```powershell
 npm ci
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Variant all -Tag v1.0.1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1 -Variant all -Tag v1.0.3
 ```
 
 构建结果在 `artifacts/release`，包含两个安装程序、含模型版的分卷数据、`models.lock.json`、发行说明及 `SHA256SUMS`。含模型版每个数据卷不超过 1 GiB。构建会自动下载并校验固定版本的 Inno Setup 编译器；模型可通过 `-ModelDirectory` 从本机缓存导入，否则按固定提交下载。切换两种安装器前请先卸载原程序，卸载保留个人模型及设置。GitLab Windows Runner 环境、变量、发布和校验步骤见 [发行指南](docs/RELEASING.md)。

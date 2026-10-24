@@ -54,6 +54,7 @@ pub struct DownloadManager {
     control: Mutex<Control>,
     records: Mutex<BTreeMap<String, Record>>,
     slots: Semaphore,
+    credential_gate: Mutex<()>,
 }
 
 impl DownloadManager {
@@ -74,6 +75,7 @@ impl DownloadManager {
             control: Mutex::new(Control::default()),
             records: Mutex::new(BTreeMap::new()),
             slots: Semaphore::new(2),
+            credential_gate: Mutex::new(()),
         })
     }
 
@@ -86,6 +88,37 @@ impl DownloadManager {
                 json!({"status":if e.code == "credential_missing" {"missing"} else {"invalid"},"message":e.message})
             }
         }
+    }
+
+    /// Write-only IPC: the token is validated and stored separately from settings.
+    /// Neither snapshots nor return values contain the credential.
+    pub async fn save_credential(&self, token: &str) -> Result<()> {
+        let _gate = self.credential_gate.lock().await;
+        let bytes = serde_yaml::to_string(&json!({"token": token.trim()}))
+            .map_err(|_| credential_invalid())?;
+        parse_credentials(bytes.as_bytes())?;
+        let target = self.paths.data.join("huggingface.yml");
+        let temp = tempfile_credential_path(&self.paths.data);
+        let result = async {
+            let mut options = tokio::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            options.mode(0o600);
+            let mut file = options.open(&temp).await?;
+            file.write_all(bytes.as_bytes()).await?;
+            file.sync_all().await?;
+            drop(file);
+            tokio::fs::rename(&temp, &target).await
+        }
+        .await;
+        if result.is_err() {
+            let _ = tokio::fs::remove_file(&temp).await;
+            return Err(AppError::new(
+                "credential_save_failed",
+                "无法保存 Hugging Face 令牌，请检查应用数据目录权限。",
+            ));
+        }
+        Ok(())
     }
 
     pub async fn start(self: &Arc<Self>, model: ModelSpec) -> Result<()> {
@@ -504,6 +537,9 @@ fn credential_invalid() -> AppError {
         "credential_invalid",
         "Hugging Face 凭据文件格式或令牌无效，请检查本地 YAML 配置。",
     )
+}
+fn tempfile_credential_path(data: &Path) -> PathBuf {
+    data.join(format!(".huggingface-{}.new", uuid::Uuid::new_v4()))
 }
 fn check_status(status: StatusCode) -> Result<()> {
     match status.as_u16() {
@@ -1134,6 +1170,57 @@ mod tests {
                 .code,
             "transient"
         );
+    }
+    #[tokio::test]
+    async fn saved_credentials_override_legacy_files_and_never_echo() {
+        let dir = tempfile::tempdir().unwrap();
+        let legacy = dir.path().join("legacy.yml");
+        tokio::fs::write(&legacy, b"broken YAML: [").await.unwrap();
+        let mut paths = Paths::new(dir.path().join("data"), dir.path().into());
+        paths.prepare().await.unwrap();
+        paths.hf_candidates = vec![paths.data.join("huggingface.yml"), legacy];
+        let manager = DownloadManager::new(paths.clone());
+        let first = "hf_FirstTestCredential123";
+        manager.save_credential(first).await.unwrap();
+        assert_eq!(
+            credentials(&paths.hf_candidates)
+                .await
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            format!("Bearer {first}")
+        );
+        let second = "hf_ReplacementTestCredential456";
+        manager.save_credential(second).await.unwrap();
+        assert_eq!(
+            credentials(&paths.hf_candidates)
+                .await
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            format!("Bearer {second}")
+        );
+        let error = manager
+            .save_credential("hf_PRIVATE_INVALID!")
+            .await
+            .unwrap_err();
+        assert!(!serde_json::to_string(&error).unwrap().contains("PRIVATE"));
+        assert_eq!(
+            credentials(&paths.hf_candidates)
+                .await
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            format!("Bearer {second}")
+        );
+        let status = manager.credential_status().await;
+        assert_eq!(status["status"], "ready");
+        assert!(!status.to_string().contains(first));
+        assert!(!status.to_string().contains(second));
+        let mut entries = tokio::fs::read_dir(&paths.data).await.unwrap();
+        while let Some(entry) = entries.next_entry().await.unwrap() {
+            assert!(!entry.file_name().to_string_lossy().ends_with(".new"));
+        }
     }
     #[test]
     fn exact_ranges_and_ignored_ranges() {

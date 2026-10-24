@@ -36,6 +36,35 @@ struct LogControl {
     update: Box<dyn Fn(&str) + Send + Sync>,
     _guard: std::sync::Mutex<tracing_appender::non_blocking::WorkerGuard>,
 }
+struct TrayLabels {
+    show: MenuItem<tauri::Wry>,
+    start: MenuItem<tauri::Wry>,
+    stop: MenuItem<tauri::Wry>,
+    quit: MenuItem<tauri::Wry>,
+}
+impl TrayLabels {
+    fn update(&self, app: &tauri::AppHandle, language: &str) -> Result<()> {
+        let en = language == "en";
+        for (item, zh, english) in [
+            (&self.show, "打开 Qwen Desk", "Open Qwen Desk"),
+            (&self.start, "启动 API 服务", "Start API Service"),
+            (&self.stop, "停止 API 服务", "Stop API Service"),
+            (&self.quit, "退出", "Quit"),
+        ] {
+            item.set_text(if en { english } else { zh })
+                .map_err(|_| native_error())?;
+        }
+        if let Some(tray) = app.tray_by_id("main") {
+            tray.set_tooltip(Some(if en {
+                "Qwen Desk · Local inference"
+            } else {
+                "Qwen Desk · 本地推理"
+            }))
+            .map_err(|_| native_error())?;
+        }
+        Ok(())
+    }
+}
 fn native_error() -> AppError {
     AppError::new("window_error", "窗口操作失败，请重试。")
 }
@@ -73,6 +102,12 @@ async fn dispatch(
     core.ensure_running()?;
     match op.as_str() {
         "snapshot" => Ok(core.snapshot().await),
+        "save_hf_token" => {
+            core.downloads
+                .save_credential(field(&payload, "token")?)
+                .await?;
+            Ok(json!(true))
+        }
         "save_settings" => {
             let _library = core.library_gate.lock().await;
             let _gate = core.settings_gate.lock().await;
@@ -109,6 +144,8 @@ async fn dispatch(
                 Ordering::Release,
             );
             (app.state::<LogControl>().update)(&saved.app.log_level);
+            app.state::<TrayLabels>()
+                .update(&app, &saved.app.language)?;
             Ok(json!(saved))
         }
         "add_model" => {
@@ -216,7 +253,14 @@ async fn dispatch(
             let (tx, rx) = tokio::sync::oneshot::channel();
             app.dialog()
                 .file()
-                .add_filter("GGUF 模型", &["gguf"])
+                .add_filter(
+                    if core.settings.read().await.app.language == "en" {
+                        "GGUF model"
+                    } else {
+                        "GGUF 模型"
+                    },
+                    &["gguf"],
+                )
                 .pick_file(move |path| {
                     let _ = tx.send(path);
                 });
@@ -525,6 +569,14 @@ pub fn run() {
                 })
                 .build(app)?;
             tray.set_visible(settings.app.tray_enabled)?;
+            app.manage(TrayLabels {
+                show,
+                start,
+                stop,
+                quit,
+            });
+            app.state::<TrayLabels>()
+                .update(app.handle(), &settings.app.language)?;
             restore_main_window(app.handle()).map_err(|e| std::io::Error::other(e.message))?;
             // VISIBLE is not restored: a previously hidden window must remain reachable.
             let silent = (settings.app.silent_start || std::env::args().any(|a| a == "--silent"))

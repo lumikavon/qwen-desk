@@ -216,15 +216,21 @@ impl ServiceSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AppSettings {
+    #[serde(default = "default_language")]
+    pub language: String,
     pub autostart: bool,
     pub silent_start: bool,
     pub close_to_tray: bool,
     pub tray_enabled: bool,
     pub log_level: String,
 }
+fn default_language() -> String {
+    "zh-CN".into()
+}
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
+            language: default_language(),
             autostart: false,
             silent_start: false,
             close_to_tray: true,
@@ -276,6 +282,9 @@ impl Settings {
     pub fn validate(&self) -> Result<()> {
         self.inference.validate()?;
         self.service.validate()?;
+        if !matches!(self.app.language.as_str(), "zh-CN" | "en") {
+            return Err(AppError::invalid("Unsupported interface language."));
+        }
         if self.models.len() > 100 {
             return Err(AppError::invalid("最多管理 100 个模型。"));
         }
@@ -311,7 +320,8 @@ pub struct Paths {
 }
 impl Paths {
     pub fn new(data: PathBuf, runtime: PathBuf) -> Self {
-        let mut hf_candidates = vec![];
+        // Settings entered in the app must override legacy credential files.
+        let mut hf_candidates = vec![data.join("huggingface.yml")];
         if let Ok(cwd) = std::env::current_dir() {
             hf_candidates.push(cwd.join("huggingface.yml"));
         }
@@ -324,7 +334,6 @@ impl Paths {
                 hf_candidates.push(dir.join("huggingface.yml"));
             }
         }
-        hf_candidates.push(data.join("huggingface.yml"));
         hf_candidates.dedup();
         Self {
             models: data.join("models"),
@@ -393,6 +402,20 @@ mod tests {
     #[test]
     fn defaults_valid() {
         Settings::default().validate().unwrap();
+    }
+    #[test]
+    fn language_migration_and_validation() {
+        let mut value = serde_json::to_value(Settings::default()).unwrap();
+        value["app"].as_object_mut().unwrap().remove("language");
+        let mut settings: Settings = serde_json::from_value(value).unwrap();
+        assert_eq!(settings.app.language, "zh-CN");
+        settings.app.language = "en".into();
+        settings.validate().unwrap();
+        let restored: Settings =
+            serde_json::from_value(serde_json::to_value(&settings).unwrap()).unwrap();
+        assert_eq!(restored.app.language, "en");
+        settings.app.language = "invalid".into();
+        assert!(settings.validate().is_err());
     }
     #[test]
     fn startup_setting_is_backward_compatible() {
